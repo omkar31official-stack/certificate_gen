@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sessions  Session[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  adminId      String
+  expires      DateTime
+  admin        Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+}
+
+model Event {
+  id                   String                 @id @default(cuid())
+  name                 String
+  description          String?
+  posterUrl            String?
+  logoUrl              String?
+  startDate            DateTime?
+  endDate              DateTime?
+  registrationDeadline DateTime?
+  venue                String?
+  category             String?
+  organizer            String?
+  status               String                 @default("Draft")
+  registrationUrl      String?
+  contactInfo          String?
+  customFields         Json?                  // Configured custom fields for this event
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  participants         Participant[]
+  certificates         Certificate[]
+  announcements        Announcement[]
+  gallery              GalleryItem[]
+  emailCampaigns       EmailCampaign[]
+  emailLogs            EmailLog[]
+  certificateTemplates CertificateTemplate[]
+}
+
+model Participant {
+  id           String        @id @default(cuid())
+  eventId      String
+  fullName     String
+  email        String
+  phone        String?
+  college      String?
+  department   String?
+  section      String?
+  rollNumber   String?
+  team         String?
+  status       String        @default("Registered") // e.g. Registered, Selected, Winner, etc.
+  position     String?       // E.g. Winner, Runner-up, Participant
+  customData   Json?         // Stores any additional mapped data from Excel
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  certificates Certificate[]
+
+  @@unique([eventId, email]) // A participant email should be unique per event
+}
+
+model CertificateTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  category     String?
+  imageUrl     String?  // Cloudinary URL of the blank template
+  pdfUrl       String?  // Cloudinary URL of the PDF version if applicable
+  eventId      String?
+  isGlobal     Boolean  @default(false)
+  canvasWidth  Float?
+  canvasHeight Float?
+  fields       Json     // Stores an array of { id, type, x, y, width, height, font, size, color, ... }
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  event        Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  certificates Certificate[]
+}
+
+model Certificate {
+  id            String              @id @default(cuid())
+  certificateId String              @unique // e.g., SLUG-GFB-2026-000127
+  eventId       String
+  participantId String
+  templateId    String
+  pdfUrl        String?             // URL to the generated PDF
+  qrCodeUrl     String?             // URL to the generated QR image
+  status        String              @default("Valid") // Valid, Revoked, Reissued
+  reissuedFromId String?            // If this is a reissued certificate
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  event         Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participant   Participant         @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  template      CertificateTemplate @relation(fields: [templateId], references: [id])
+  emailLogs     EmailLog[]
+  verifications VerificationLog[]
+}
+
+model EmailCampaign {
+  id           String   @id @default(cuid())
+  eventId      String
+  name         String
+  subject      String
+  bodyTemplate String
+  status       String   @default("Pending") // Pending, Processing, Completed, Failed
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  emailLogs    EmailLog[]
+}
+
+model EmailLog {
+  id              String        @id @default(cuid())
+  campaignId      String?
+  eventId         String
+  certificateId   String?
+  recipientEmail  String
+  status          String        @default("Pending") // Pending, Processing, Sent, Failed
+  error           String?
+  retryCount      Int           @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  campaign        EmailCampaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  event           Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  certificate     Certificate?  @relation(fields: [certificateId], references: [id], onDelete: SetNull)
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  eventId   String
+  title     String
+  content   String
+  isPublic  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model GalleryItem {
+  id          String   @id @default(cuid())
+  eventId     String
+  type        String   @default("Image") // Image, Video
+  url         String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model VerificationLog {
+  id            String      @id @default(cuid())
+  certificateId String
+  ipAddress     String?
+  userAgent     String?
+  verifiedAt    DateTime    @default(now())
+
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  adminId   String?
+  action    String
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
+
+model SMTPConfiguration {
+  id        String   @id @default(cuid())
+  provider  String   @default("Gmail") // Gmail, Custom, etc.
+  host      String?
+  port      Int?
+  user      String
+  password  String
+  fromEmail String
+  fromName  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SystemSettings {
+  id              String   @id @default(cuid())
+  organizationName String  @default("SAPTHAGIRI LIBRE-SOFTWARE USERS GROUP")
+  shortName       String   @default("SLUG")
+  logoUrl         String?
+  contactEmail    String?
+  footerText      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
