@@ -11,6 +11,7 @@ export interface EditorField {
   y: number;
   fontSize: number;
   color: string;
+  fontFamily?: string;
 }
 
 interface TemplateEditorProps {

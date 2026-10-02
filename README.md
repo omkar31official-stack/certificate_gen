@@ -18,7 +18,17 @@ A complete, production-ready web application designed for the **SAPTHAGIRI LIBRE
 - **Storage:** Cloudinary (for templates, generated PDFs, and gallery items)
 - **Email:** Nodemailer (SMTP)
 - **PDF Generation:** PDF-Lib
-- **Background Jobs:** Vercel Cron Jobs / Custom Queue Architecture
+- **Background Jobs:** External Cron (GitHub Actions) / Custom Queue Architecture
+
+## Email Queue & Background Jobs (Vercel Hobby Tier)
+Vercel Hobby only supports 1 cron job per day, which delays bulk certificate emails. To fix this, this project removes `vercel.json` and uses an external trigger to process the email queue every 5 minutes while maintaining security (via `CRON_SECRET`).
+
+**To set up the external cron:**
+1. If deploying via GitHub, the included `.github/workflows/email-cron.yml` will automatically run every 5 minutes.
+2. Go to your GitHub repository **Settings > Secrets and variables > Actions**.
+3. Add a repository secret named `APP_URL` with your production URL (e.g., `https://your-domain.vercel.app`).
+4. Add another secret named `CRON_SECRET` with the exact same secure token you used in your Vercel environment variables.
+*(Alternatively, you can use a free service like cron-job.org to send a GET request to `https://your-domain.vercel.app/api/cron/process-email-queue` with the header `Authorization: Bearer YOUR_CRON_SECRET` every 5 minutes).*
 
 ## Setup Instructions
 1. Ensure your PostgreSQL connection string is in `.env.local`
